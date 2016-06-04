@@ -3,6 +3,7 @@ using DataStructures
 
 include("io.jl")
 include("protocol.jl")
+include("store.jl")
 include("server.jl")
 
 
