@@ -5,17 +5,15 @@ type PokeServer
     socket::TCPServer
     cache::SortedDict{Vector{UInt8}, Vector{UInt8}}
     cache_size::Int64
-    dump_file::UTF8String
+    dump_path::UTF8String
 end
 
-new_cache() = SortedDict((Dict{Vector{UInt8}, Vector{UInt8}}()), Base.Forward)
 
-function startserver(port::Int, dump_file::AbstractString)
+function startserver(port::Int, dump_path::AbstractString)
+    server_socket = listen(port)
+    pserv = PokeServer(server_socket, new_cache(), 0, dump_path)
     task = @async begin
-        server_socket = TCPServer()        
         try
-            server_socket = listen(port)
-            pserv = PokeServer(server_socket, new_cache(), 0, dump_file)
             while true
                 sock = accept(server_socket)
                 serve_conn(pserv, sock)
@@ -28,7 +26,7 @@ function startserver(port::Int, dump_file::AbstractString)
             close(server_socket)
         end
     end
-    return task  # TODO: return pserv instead
+    return task, pserv  # TODO: return pserv instead
 end
 
 
@@ -40,6 +38,7 @@ end
 function serve_conn(poke_server::PokeServer, sock::TCPSocket)
     while true
         req = readobj(sock, PokeRequest)
+        println(req)
         for (k, v) in req.data
             cache[k] = v
         end
@@ -52,3 +51,27 @@ end
 function Base.isless(x::Vector{UInt8}, y::Vector{UInt8})
     return isless(bytestring(x), bytestring(y))
 end
+
+
+function merge()
+
+end
+
+function mergedump(dump_path::AbstractString, cache::Associative)
+    if isfile(dump_path)
+        # create
+
+    else
+        # merge
+        dumpf = open(dump_path)
+        temp_path, tempf = mktemp()
+        try
+
+        finally
+            close(dumpf)
+            close(tempf)
+            rm(tempf)
+        end
+    end
+end
+

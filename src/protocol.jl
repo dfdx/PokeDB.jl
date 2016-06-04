@@ -1,9 +1,9 @@
 
-typealias KVPair Tuple{Vector{UInt8}, Vector{UInt8}}
+
 
 immutable PokeRequest
     rid::Int64                 # request id
-    data::Vector{KVPair}       # data  
+    data::Vector{PokeRecord}   # data  
 end
 
 immutable PokeResponse
