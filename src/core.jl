@@ -2,10 +2,11 @@
 
 using DataStructures
 
+include("common.jl")
 include("io.jl")
 include("protocol.jl")
 include("server.jl")
 
 
-sample_request = PokeRequest(1, KVPair[(b"12345", b"old dog"),
-                                       (b"54321", b"new tricks")])
+sample_request = PokeRequest(1, [PokeRecord(b"12345", b"old dog"),
+                                 PokeRecord(b"54321", b"new tricks")])
