@@ -5,6 +5,7 @@ using DataStructures
 include("common.jl")
 include("io.jl")
 include("protocol.jl")
+include("store.jl")
 include("server.jl")
 
 
