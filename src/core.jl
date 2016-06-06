@@ -1,8 +1,10 @@
 
 
 using DataStructures
+using Iterators
 
 include("common.jl")
+include("record.jl")
 include("io.jl")
 include("protocol.jl")
 include("store.jl")

@@ -1,114 +1,107 @@
 
-type PokeRecord
-    key::Vector{UInt8}
-    value::Vector{UInt8}
+
+## Store
+
+abstract Store
+
+function Base.push!(store::Store, k::Key, v::Value)
+    error("Method `push!` is not implemented for store of type $(typeof(store))")
+end
+
+function prepare!(store::Store)
+    error("Method `prepare` is not implemented for store " *
+          "of type $(typeof(store))")
+end
+
+function iterator(store::Store)
+    error("Method `iterator` is not implemented for store " *
+          "of type $(typeof(store))")
+end
+
+# MemStore
+
+abstract MemStore <: Store
+
+type ArrayMemStore <: MemStore
+    data::Vector{PokeRecord}
+    next_idx::Int    
+    ArrayMemStore(capacity=1_000_000) = new(Array(PokeRecord, capacity), 1)
+end
+
+function Base.show(io::IO, store::ArrayMemStore)
+    print(io, "ArrrayMemStore($(store.next_idx-1)/$(length(store.data)))")
+end
+
+function Base.push!(store::ArrayMemStore, k::Key, v::Value)
+    store.data[store.next_idx] = PokeRecord(k, v)
+    store.next_idx += 1    
+end
+
+function prepare!(store::ArrayMemStore)
+    sort!(store.data)
+end
+
+function iterator(store::ArrayMemStore)
+    return store.data  # TODO: distinct sorted
+end
+
+
+# FileStore
+
+type FileStore <: Store
+    path::AbstractString    
+end
+
+function Base.push!(store::FileStore)
+    error("FileStore doesn't support direct pushing, " *
+          "use `createdump` or `mergedump` instead")
+end
+
+function prepare!(store::FileStore)
+    # do nothing
+end
+
+function iterator(store::FileStore)
+    io = open(store.path)
+    return PokeIterator(io)
 end
 
 
 
+function createdump(dumpf::IOStream, memstore::MemStore)
+    for rec in iterator(memstore)
+        writeobj(dumpf, rec)
+    end
+end
 
-function createdump(dumpf::IOStream, memstore::SortedDict)
-    for (k, v) in memstore
-        writeobj(dumpf, PokeRecord(k, v))
+function mergedump(outf::IOStream, filestore::FileStore, memstore::MemStore)
+    merged = mergesorted(iterator(memstore), iterator(filestore))  # important: memstore first
+    for rec in merged
+        write(outf, rec)
     end
 end
 
 
-function mergedump(outf::IOStream, dumpf::IOStream, memstore::SortedDict)
-    state = start(memstore)
-    while !eof(dumpf) && !done(memstore)
+# pre-allocated array of KV pairs: ~6s
+# Dict: ~15s
+# SortedDict: ~9s
 
-    end
-    if !done(memstore)
 
-    end
+function perf_test()
+    N = 1_000_000
+    println("$(N * 110 / 1024 / 1024) Mb")
+    K = [rand(UInt8, 10) for i=1:N]
+    V = [rand(UInt8, 100) for i=1:N]
+    KV = collect(zip(K, V))        
+    A = Array(Tuple{Vector{UInt8},Vector{UInt8}}, N)
+    SD = create_memstore()
+    @time @inbounds for i=1:N A[i] = KV[i] end
+    @time sort(A, lt=(x,y) -> (bytestring(x[1]) < (bytestring(y[1]))))
+    @time sort(A)
+    @time @inbounds for i=1:N SD[K[i]] = V[i] end
+    @time @inbounds for i=1:N SD[K[i]] = V[i] end
+    @time collect(SD)
 end
-
-
-type PokeIterator
-    io::IO
-end
-
-function Base.start(pit::PokeIterator)
-    return nothing
-end
-
-function Base.next(pit::PokeIterator, s)
-    return readobj(pit.io, PokeRecord)
-end
-
-function Base.done(pit::PokeIterator, s)
-    return eof(pit.io)
-end
-
-
-## type MergedState
-##     s1    # (next) state of iterator 1
-##     s2    # (next) state of iterator 2
-##     x1    # current head of iterator 1
-##     x2    # current head of iterator 2
-## end
-
-## type MergedIter
-##     it1
-##     it2
-## end
-
-
-## function mergesorted(it1, it2)
-##     return MergedIter(it1, it2)
-## end
-
-
-## function Base.start(mit::MergedIter)
-##     # assuming both iterations have at least 1 element
-##     x1, s1 = next(mit.it1, start(mit.it1))
-##     x2, s2 = next(mit.it2, start(mit.it2))
-##     return MergedState(s1, s2, x1, x2)
-## end
-
-
-## function Base.next(mit::MergedIter, s::MergedState)
-##     # todo: handle case when mergeiter is done
-##     if done(mit.it1, s.s1)        
-##         if s.x1 != nothing
-##             # we have one more "cached element"            
-##             return s.x1, MergedState(s.s1, s.s2, nothing, s.x2)
-##         else
-##             nx2, ns2 = next(mit.it2, s.s2)
-##             return s.x2, MergedState(s.s1, ns2, s.x1, nx2)
-##         end        
-##     elseif done(mit.it2, s.s2)
-##         if s.x1 != nothing
-##             # we have one more "cached element"            
-##             return s.x2, MergedState(s.s1, s.s2, s.x1, nothing)
-##         else
-##             nx1, ns1 = next(mit.it1, s.s1)
-##             return s.x1, MergedState(ns1, s.s2, nx1, s.x2)
-##         end
-##     elseif s.x1 > s.x2
-##         # return 2nd, move 2nd
-##         nx2, ns2 = next(mit.it2, s.s2)
-##         return s.x2, MergedState(s.s1, ns2, s.x1, nx2)
-##     elseif s.x1 < s.x2
-##         # return 1st, move 1st
-##         nx1, ns1 = next(mit.it1, s.s1)
-##         return s.x1, MergedState(ns1, s.s2, nx1, s.x2)
-##     else
-##         # elements are equal, return 1st, move both
-##         nx1, ns1 = next(mit.it1, s.s1)
-##         nx2, ns2 = next(mit.it2, s.s2)
-##         return s.x1, MergedState(ns1, ns2, nx1, nx2)
-##     end
-## end
-
-## function Base.done(mit::MergedIter, s::MergedState)
-##     return (done(mit.it1, s.s1) && s.x1 == nothing && 
-##             done(mit.it2, s.s2) && s.x2 == nothing)
-## end
-
-
-
 
 
 function main()
