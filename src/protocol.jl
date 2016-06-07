@@ -1,6 +1,4 @@
 
-
-
 immutable PokeRequest
     rid::Int64                 # request id
     data::Vector{PokeRecord}   # data  

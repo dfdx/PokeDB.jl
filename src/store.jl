@@ -41,6 +41,21 @@ function prepare!(store::ArrayMemStore)
     sort!(store.data)
 end
 
+function Base.start(store::ArrayMemStore)
+    
+    return start(store.data)
+end
+
+function Base.next(store::ArrayMemStore, s)
+    
+    return next(store.data, s)
+end
+
+function Base.done(store::ArrayMemStore, s)    
+    return done(store.data, s)
+end
+
+
 function iterator(store::ArrayMemStore)
     return store.data  # TODO: distinct sorted
 end
@@ -105,11 +120,12 @@ end
 
 
 function main()
-    memstore = new_cache()
+    memstore = ArrayMemStore()
     @time for i=1:1_000_000
-        memstore[rand(UInt8, 10)] = rand(UInt8, 100)
+        push!(memstore, rand(UInt8, 10), rand(UInt8, 100))
     end
-    @time open("/tmp/dump") do dumpf
+    @time prepare!(memstore)
+    @time open("/tmp/dump", "w") do dumpf
         createdump(dumpf, memstore)
     end
 end
