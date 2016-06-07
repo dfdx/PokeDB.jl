@@ -1,10 +1,11 @@
 
+import Base: show, push!, start, next, done
 
 ## Store
 
 abstract Store
 
-function Base.push!(store::Store, k::Key, v::Value)
+function push!(store::Store, k::Key, v::Value)
     error("Method `push!` is not implemented for store of type $(typeof(store))")
 end
 
@@ -13,10 +14,11 @@ function prepare!(store::Store)
           "of type $(typeof(store))")
 end
 
-function iterator(store::Store)
-    error("Method `iterator` is not implemented for store " *
+function start(store::Store)
+    error("Iteration is not implemented for store " *
           "of type $(typeof(store))")
 end
+
 
 # MemStore
 
@@ -24,50 +26,49 @@ abstract MemStore <: Store
 
 type ArrayMemStore <: MemStore
     data::Vector{PokeRecord}
-    next_idx::Int    
+    next_idx::Int
     ArrayMemStore(capacity=1_000_000) = new(Array(PokeRecord, capacity), 1)
 end
 
-function Base.show(io::IO, store::ArrayMemStore)
+function show(io::IO, store::ArrayMemStore)
     print(io, "ArrrayMemStore($(store.next_idx-1)/$(length(store.data)))")
 end
 
-function Base.push!(store::ArrayMemStore, k::Key, v::Value)
+function push!(store::ArrayMemStore, k::Key, v::Value)
     store.data[store.next_idx] = PokeRecord(k, v)
-    store.next_idx += 1    
+    store.next_idx += 1
 end
 
 function prepare!(store::ArrayMemStore)
     sort!(store.data)
 end
 
-function Base.start(store::ArrayMemStore)
-    
-    return start(store.data)
+function start(store::ArrayMemStore)
+    it = uniquesorted(store.data)
+    s = start(it)
+    return (it, s)  # note: putting both - iterator and actual state into
+                    # ArrayMemStore's "state"
 end
 
-function Base.next(store::ArrayMemStore, s)
-    
-    return next(store.data, s)
+function next(store::ArrayMemStore, state)
+    it, s = state
+    x, new_s = next(it, s)
+    return x, (it, new_s)
 end
 
-function Base.done(store::ArrayMemStore, s)    
-    return done(store.data, s)
-end
-
-
-function iterator(store::ArrayMemStore)
-    return store.data  # TODO: distinct sorted
+function done(store::ArrayMemStore, state)
+    it, s = state
+    return done(it, s)
 end
 
 
 # FileStore
 
 type FileStore <: Store
-    path::AbstractString    
+    path::AbstractString
 end
 
-function Base.push!(store::FileStore)
+function push!(store::FileStore)
     error("FileStore doesn't support direct pushing, " *
           "use `createdump` or `mergedump` instead")
 end
@@ -76,30 +77,49 @@ function prepare!(store::FileStore)
     # do nothing
 end
 
-function iterator(store::FileStore)
+
+function start(store::FileStore)
+    # TODO: we open file, but don't close in iterator
+    # need to handle it somehow
     io = open(store.path)
-    return PokeIterator(io)
+    it = PokeIterator(io)
+    s = start(it)
+    return (it, s)
+end
+
+function next(store::FileStore, iter_state::Tuple)
+    it, s = iter_state
+    x, new_s = next(it, s)
+    return x, (it, new_s)
+end
+
+function done(store::FileStore, iter_state::Tuple)
+    it, s = iter_state
+    return done(it, s)
 end
 
 
 
+
 function createdump(dumpf::IOStream, memstore::MemStore)
-    for rec in iterator(memstore)
+    for rec in memstore
         writeobj(dumpf, rec)
     end
 end
 
 function mergedump(outf::IOStream, filestore::FileStore, memstore::MemStore)
-    merged = mergesorted(iterator(memstore), iterator(filestore))  # important: memstore first
+    # important: memstore first since it has more recent records
+    merged = mergesorted(memstore, filestore)
     for rec in merged
-        write(outf, rec)
+        writeobj(outf, rec)
     end
 end
 
 
-# pre-allocated array of KV pairs: ~6s
-# Dict: ~15s
-# SortedDict: ~9s
+# TODO:
+# 1) block read for PokeIterator
+# 2) mergesorted for multiple iterators (min(map(head, iterators)); move that iter; if done, remove from list)
+
 
 
 function perf_test()
@@ -107,7 +127,7 @@ function perf_test()
     println("$(N * 110 / 1024 / 1024) Mb")
     K = [rand(UInt8, 10) for i=1:N]
     V = [rand(UInt8, 100) for i=1:N]
-    KV = collect(zip(K, V))        
+    KV = collect(zip(K, V))
     A = Array(Tuple{Vector{UInt8},Vector{UInt8}}, N)
     SD = create_memstore()
     @time @inbounds for i=1:N A[i] = KV[i] end
@@ -127,5 +147,10 @@ function main()
     @time prepare!(memstore)
     @time open("/tmp/dump", "w") do dumpf
         createdump(dumpf, memstore)
+    end
+
+    fstore = FileStore("/tmp/new_dump")
+    @time open("/tmp/dump", "w") do new_dumpf
+        @profile mergedump(new_dumpf, fstore, memstore)
     end
 end

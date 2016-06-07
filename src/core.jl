@@ -7,6 +7,7 @@ include("common.jl")
 include("record.jl")
 include("io.jl")
 include("protocol.jl")
+include("unique.jl")
 include("store.jl")
 include("server.jl")
 

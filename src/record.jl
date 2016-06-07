@@ -33,8 +33,8 @@ function Base.start(pit::PokeIterator)
     return nothing
 end
 
-function Base.next(pit::PokeIterator, s)
-    return readobj(pit.io, PokeRecord)
+function Base.next(pit::PokeIterator, s::Void)
+    return readobj(pit.io, PokeRecord), nothing
 end
 
 function Base.done(pit::PokeIterator, s)
