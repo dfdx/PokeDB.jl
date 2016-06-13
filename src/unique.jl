@@ -1,34 +1,32 @@
 
-import Iterators: PrefetchIterator, PrefetchState, head
+using Iterators
+import Iterators: PeekIter
 import Base: start, next, done
 
-immutable UniqueIterator
-    inner::PrefetchIterator
-    UniqueIterator(inner::PrefetchIterator) = new(inner)
-    UniqueIterator(inner) = new(PrefetchIterator(inner))
+immutable UniqueIter
+    inner::PeekIter
+    UniqueIter(inner::PeekIter) = new(inner)
+    UniqueIter(inner) = new(PeekIter(inner))
 end
 
-immutable UniqueState
-    inner::PrefetchState    
+# TODO: eltype, iteratorsize, length, size
+
+function start(it::UniqueIter)
+    return start(it.inner)
 end
 
-function start(it::UniqueIterator)
-    return UniqueState(start(it.inner))
-end
-
-function next(it::UniqueIterator, s::UniqueState)
-    ins = s.inner
-    hd, ins = next(it.inner, ins)
-    while hd == head(ins) && !done(it.inner, ins)
-        hd, ins = next(it.inner, ins)
+function next(it::UniqueIter, s)
+    hd, s = next(it.inner, s)
+    while !done(it.inner, s) && hd == get(peek(it.inner, s)) 
+        hd, s = next(it.inner, s)
     end
-    return hd, UniqueState(ins)
+    return hd, s
 end
 
-function done(it::UniqueIterator, s::UniqueState)
-    return done(it.inner, s.inner)
+function done(it::UniqueIter, s)
+    return done(it.inner, s)
 end
 
-function uniquesorted(it)
-    UniqueIterator(it)
+function unique(it)
+    UniqueIter(it)
 end
